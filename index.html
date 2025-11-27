@@ -1,0 +1,268 @@
+<!-- Include Inter font -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+body { margin: 0; padding: 0; }
+
+/* --- FORM WRAPPER --- */
+.dynamic-form {
+width: 100%;
+max-width: 100%;
+margin: 0;
+font-family: 'Inter', sans-serif;
+display: grid;
+gap: 20px;
+background: #fff;
+box-sizing: border-box;
+}
+
+/* FORM ROW */
+.form-row {
+display: flex;
+flex-direction: column;
+gap: 6px;
+}
+
+/* TWO-COLUMN DESKTOP */
+@media (min-width: 700px) {
+.form-row.horizontal {
+display: grid;
+grid-template-columns: 30% 70%;
+gap: 20px;
+}
+}
+
+/* LABEL */
+.dynamic-form label {
+font-weight: 600;
+color: #333;
+padding-top: 8px;
+padding-left: 10px;
+}
+
+/* INPUTS */
+.dynamic-form input,
+.dynamic-form select {
+width: 100%;
+padding: 12px 14px;
+border: 1px solid #dcdcdc;
+border-radius: 8px;
+font-size: 15px;
+background: #fafafa;
+outline: none;
+transition: 0.3s ease;
+}
+
+.dynamic-form input:focus,
+.dynamic-form select:focus {
+border-color: #000;
+background: #fff;
+box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+}
+
+/* BUTTONS */
+.button-group {
+display: flex;
+gap: 10px;
+}
+
+.dynamic-form button {
+padding: 16px;
+border: none;
+border-radius: 8px;
+background: #000;
+color: #fff;
+font-size: 16px;
+font-weight: 600;
+cursor: pointer;
+}
+
+.reset-btn {
+padding: 16px;
+border-radius: 8px;
+background: #e5e5e5;
+color: #000;
+font-size: 16px;
+cursor: pointer;
+}
+
+/* Dynamic field visibility */
+.hidden {
+display: none;
+}
+
+/* Success/Error messages */
+#formMessage {
+display: none;
+padding: 15px;
+border-radius: 8px;
+margin-bottom: 10px;
+}
+</style>
+
+
+<html>
+<head>
+<body>
+
+<!-- Inline messages -->
+<div id="formMessage"></div>
+
+<form id="dynamicForm" class="dynamic-form">
+
+<!-- Name -->
+<div class="form-row horizontal">
+<label>Name</label>
+<input type="text" name="name" required>
+</div>
+
+<!-- Subject -->
+<div class="form-row horizontal">
+<label>Subject</label>
+<select id="subject" name="subject" required>
+<option value="">Select...</option>
+<option value="Physics">Physics</option>
+<option value="Math">Math</option>
+<option value="Chemistry">Chemistry</option>
+</select>
+</div>
+
+<!-- Dynamic FIELDS Area -->
+<div id="dynamicFields"></div>
+
+<!-- Deadline -->
+<div class="form-row horizontal">
+<label>Deadline</label>
+<input type="date" name="deadline" required>
+</div>
+
+<!-- File Upload -->
+<div class="form-row horizontal">
+<label>Upload File</label>
+<input type="file" name="file">
+</div>
+
+<!-- Buttons -->
+<div class="form-row horizontal">
+<label></label>
+<div class="button-group">
+<button type="submit">Submit</button>
+<button type="reset" class="reset-btn">Reset</button>
+</div>
+</div>
+
+</form>
+
+
+</body>
+</head>
+</html>
+
+
+<script>
+const dynamicFields = document.getElementById("dynamicFields");
+const subject = document.getElementById("subject");
+const form = document.getElementById("dynamicForm");
+const formMessage = document.getElementById("formMessage");
+
+const fields = {
+Physics: ["Phy 1", "Phy 2"],
+Math: ["Math 1", "Math 2"],
+Chemistry: ["Chem 1", "Chem 2"]
+};
+
+// Handle dynamic fields
+subject.addEventListener("change", () => {
+  const selected = subject.value;
+  dynamicFields.innerHTML = "";
+  formMessage.style.display = "none";
+
+  if (!selected) return;
+
+  fields[selected].forEach(label => {
+    const row = document.createElement("div");
+    row.className = "form-row horizontal";
+    row.innerHTML = `
+      <label>${label}</label>
+      <input type="text" name="${label.replace(' ', '_').toLowerCase()}" placeholder="Enter ${label}">
+    `;
+    dynamicFields.appendChild(row);
+  });
+});
+
+// Submit to GAS
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  formMessage.style.display = "none";
+  const submitBtn = form.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Submitting...";
+
+  const formData = new FormData(form);
+
+  // Convert file to base64
+  let fileBase64 = null, fileName = null, fileType = null;
+  const fileInput = form.querySelector('input[type="file"]');
+  if (fileInput && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    fileName = file.name;
+    fileType = file.type;
+    fileBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Collect dynamic fields
+  const dynamicData = {};
+  dynamicFields.querySelectorAll('input').forEach(input => {
+    dynamicData[input.name] = input.value;
+  });
+
+  const payload = {
+    name: formData.get("name"),
+    subject: formData.get("subject"),
+    deadline: formData.get("deadline"),
+    dynamicFields: dynamicData,
+    fileName: fileName,
+    fileType: fileType,
+    fileData: fileBase64
+  };
+
+  try {
+    const response = await fetch("https://script.google.com/macros/s/AKfycbzuSCQsQ4KJ0QVYibP3uRMv_DNY1dgV1KBWmMJ2fbSRiXJ8VFWlIm0MN0VTEaCZyCYg/exec", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (result.ok) {
+      formMessage.style.display = "block";
+      formMessage.style.background = "#e8f7ef";
+      formMessage.style.color = "#1c7c47";
+      formMessage.textContent = "Form submitted successfully!";
+      form.reset();
+      dynamicFields.innerHTML = "";
+    } else {
+      formMessage.style.display = "block";
+      formMessage.style.background = "#fdecea";
+      formMessage.style.color = "#b71c1c";
+      formMessage.textContent = "Error: " + (result.error || "Unknown error");
+    }
+  } catch (err) {
+    console.error(err);
+    formMessage.style.display = "block";
+    formMessage.style.background = "#fdecea";
+    formMessage.style.color = "#b71c1c";
+    formMessage.textContent = "Failed to submit form.";
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Submit";
+});
+</script>
